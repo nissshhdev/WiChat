@@ -103,6 +103,7 @@ fun MainNavigationContainer(
         )
     } else {
         Scaffold(
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
             bottomBar = {
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surface,

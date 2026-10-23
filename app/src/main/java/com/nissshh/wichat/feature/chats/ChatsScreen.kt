@@ -101,7 +101,7 @@ fun ChatsScreen(
                 )
             }
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = androidx.compose.ui.graphics.Color.Transparent
     ) { paddingValues ->
         Column(
             modifier = Modifier
