@@ -131,6 +131,9 @@ interface WiChatDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: MessageEntity)
 
+    @Query("DELETE FROM messages WHERE messageId = :messageId")
+    suspend fun deleteMessageById(messageId: String)
+
     @Query("UPDATE messages SET deliveryStatus = :status WHERE messageId = :messageId")
     suspend fun updateMessageStatus(messageId: String, status: String)
 

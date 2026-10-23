@@ -361,6 +361,10 @@ class WiChatRepositoryImpl(
         }
     }
 
+    override suspend fun deleteMessage(messageId: String) {
+        dao.deleteMessageById(messageId)
+    }
+
     override suspend fun deleteConversation(conversationId: String) {
         dao.clearMessagesForConversation(conversationId)
         dao.deleteConversation(conversationId)

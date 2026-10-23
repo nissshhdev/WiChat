@@ -56,6 +56,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -268,6 +269,7 @@ fun OneToOneChatScreen(
 
     var previewMedia by remember { mutableStateOf<MediaPreviewTarget?>(null) }
     var fileToDownload by remember { mutableStateOf<FileDownloadTarget?>(null) }
+    var messageActionsTarget by remember { mutableStateOf<ChatMessage?>(null) }
 
     val attachmentPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -431,6 +433,9 @@ fun OneToOneChatScreen(
                         },
                         onMediaLongClick = { target ->
                             fileToDownload = target
+                        },
+                        onMessageLongClick = { msg ->
+                            messageActionsTarget = msg
                         }
                     )
                 }
@@ -464,6 +469,95 @@ fun OneToOneChatScreen(
         InbuiltMediaViewerDialog(
             target = target,
             onDismiss = { previewMedia = null }
+        )
+    }
+
+    // Long press message action dialog (Delete message & Download file options)
+    if (messageActionsTarget != null) {
+        val targetMsg = messageActionsTarget!!
+        val targetRawText = targetMsg.textContent
+        val msgHasMedia = targetRawText.contains("[local_media:")
+        val msgMediaPath = if (msgHasMedia) {
+            targetRawText.substringAfter("[local_media:").substringBefore("]")
+        } else null
+        val msgIsVideo = msgMediaPath?.endsWith(".mp4") == true || targetRawText.contains("Video")
+
+        AlertDialog(
+            onDismissRequest = { messageActionsTarget = null },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.DeleteOutline,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Message Options",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Choose an action for this message:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (msgHasMedia && msgMediaPath != null) {
+                        OutlinedButton(
+                            onClick = {
+                                val cleanName = File(msgMediaPath).name
+                                fileToDownload = FileDownloadTarget(
+                                    sourcePath = msgMediaPath,
+                                    displayName = cleanName,
+                                    isVideo = msgIsVideo
+                                )
+                                messageActionsTarget = null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Save File to Downloads", fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val msgId = targetMsg.messageId
+                        messageActionsTarget = null
+                        scope.launch {
+                            repository.deleteMessage(msgId)
+                            Toast.makeText(context, "Message deleted", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Delete", fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { messageActionsTarget = null },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         )
     }
 
@@ -632,7 +726,8 @@ fun MessageBubble(
     senderName: String = "",
     showSenderName: Boolean = false,
     onMediaClick: (MediaPreviewTarget) -> Unit = {},
-    onMediaLongClick: (FileDownloadTarget) -> Unit = {}
+    onMediaLongClick: (FileDownloadTarget) -> Unit = {},
+    onMessageLongClick: (ChatMessage) -> Unit = {}
 ) {
     val isOutgoing = message.isOutgoing
     val alignment = if (isOutgoing) Alignment.CenterEnd else Alignment.CenterStart
@@ -671,16 +766,7 @@ fun MessageBubble(
                 .combinedClickable(
                     onClick = {},
                     onLongClick = {
-                        if (mediaPath != null) {
-                            val cleanName = File(mediaPath).name
-                            onMediaLongClick(
-                                FileDownloadTarget(
-                                    sourcePath = mediaPath,
-                                    displayName = cleanName,
-                                    isVideo = isVideo
-                                )
-                            )
-                        }
+                        onMessageLongClick(message)
                     }
                 )
                 .padding(horizontal = 14.dp, vertical = 10.dp)

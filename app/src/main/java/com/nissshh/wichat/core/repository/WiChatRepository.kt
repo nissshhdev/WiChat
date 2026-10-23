@@ -34,6 +34,7 @@ interface WiChatRepository {
     suspend fun startDirectConversation(peer: DiscoveredPeer): String
     suspend fun createGroupConversation(groupTitle: String, memberPeerIds: List<String>): String
     suspend fun clearChat(conversationId: String)
+    suspend fun deleteMessage(messageId: String)
     suspend fun deleteConversation(conversationId: String)
     suspend fun markConversationAsRead(conversationId: String)
     suspend fun updateProfile(displayName: String, bio: String, avatarUri: String? = null)
