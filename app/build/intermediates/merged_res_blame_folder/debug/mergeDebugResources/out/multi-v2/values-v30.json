@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.nissshh.wichat.app-mergeDebugResources-59:/values-v30/values-v30.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\AMIT KUMAR\\.gradle\\caches\\8.10.2\\transforms\\59eb645eecdd757c49f3083bb7f97f3a\\transformed\\material3-release\\res\\values-v30\\values-v30.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "72",
+                        "endOffsets": "123"
+                    }
+                }
+            ]
+        }
+    ]
+}

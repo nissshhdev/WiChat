@@ -1,0 +1,12 @@
+R_DEF: Internal format may change without notice
+local
+drawable ic_launcher_background
+drawable ic_launcher_foreground
+font dm_sans_bold
+font dm_sans_medium
+font dm_sans_regular
+font space_grotesk
+mipmap ic_launcher
+mipmap ic_launcher_round
+string app_name
+style Theme.WiChat

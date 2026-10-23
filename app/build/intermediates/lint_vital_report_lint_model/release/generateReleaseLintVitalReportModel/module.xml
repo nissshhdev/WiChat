@@ -1,0 +1,19 @@
+<lint-module
+    format="1"
+    dir="C:\Users\AMIT KUMAR\OneDrive\Documents\NIshant\WiChat\app"
+    name=":app"
+    type="APP"
+    maven="WiChat:app:unspecified"
+    agpVersion="8.7.1"
+    buildFolder="build"
+    bootClassPath="C:\Users\AMIT KUMAR\OneDrive\Documents\OniBrowser\.android-sdk\platforms\android-34\android.jar;C:\Users\AMIT KUMAR\OneDrive\Documents\OniBrowser\.android-sdk\build-tools\34.0.0\core-lambda-stubs.jar"
+    javaSourceLevel="17"
+    compileTarget="android-34"
+    neverShrinking="true">
+  <lintOptions
+      abortOnError="true"
+      absolutePaths="true"
+      checkReleaseBuilds="true"
+      explainIssues="true"/>
+  <variant name="release"/>
+</lint-module>
