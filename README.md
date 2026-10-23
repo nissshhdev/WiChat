@@ -95,10 +95,11 @@ Everything stays on your local network. No tracking, no metadata collection, and
 
 ## ☕ Support & Community
 
-Created with care by **nissshh** ([@nissshhdev](https://github.com/nissshhdev)).
+Created with care by **nissshh** 🇮🇳 ([@nissshhdev](https://github.com/nissshhdev)).
 
-If you find WiChat useful or appreciate private local-network communication, feel free to support:
+If you find WiChat useful, please consider starring the repository and supporting the project:
 
+[![GitHub Star](https://img.shields.io/github/stars/nissshhdev/WiChat?style=for-the-badge&logo=github&color=168653&label=Star%20WiChat)](https://github.com/nissshhdev/WiChat)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/nissshhdevz)
 
 ---
