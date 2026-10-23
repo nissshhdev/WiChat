@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.65"
+        android:scaleY="0.65"
+        android:translateX="18.9"
+        android:translateY="18.9">
+        <!-- Chat Bubble Outer -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M54,16 C33.013,16 16,31.222 16,50 C16,57.195 18.508,63.857 22.84,69.294 L18.25,86.5 C18.02,87.35 18.85,88.1 19.65,87.75 L37.28,80.12 C42.41,82.63 48.06,84 54,84 C74.987,84 92,68.778 92,50 C92,31.222 74.987,16 54,16 Z" />
+        <!-- Stylized W / Wi-Fi Signal inside in Green -->
+        <path
+            android:fillColor="#168653"
+            android:pathData="M34,36 L42,62 L50,44 L58,62 L66,36 L72,36 L61.5,70 L53.5,70 L46,53.5 L38.5,70 L30.5,70 L28,36 Z" />
+    </group>
+</vector>
