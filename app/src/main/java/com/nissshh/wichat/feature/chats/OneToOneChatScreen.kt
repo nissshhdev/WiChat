@@ -87,7 +87,9 @@ import com.nissshh.wichat.core.designsystem.component.WiChatAvatar
 import com.nissshh.wichat.core.model.ChatMessage
 import com.nissshh.wichat.core.model.MessageDeliveryStatus
 import com.nissshh.wichat.core.repository.WiChatRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -107,42 +109,146 @@ data class FileDownloadTarget(
     val isVideo: Boolean
 )
 
-fun downloadFileToPublicStorage(context: Context, target: FileDownloadTarget): Boolean {
+suspend fun downloadFileToPublicStorage(
+    context: Context,
+    target: FileDownloadTarget
+): Boolean = withContext(Dispatchers.IO) {
     val sourceFile = File(target.sourcePath)
-    if (!sourceFile.exists()) return false
+    if (!sourceFile.exists() || sourceFile.length() == 0L) {
+        return@withContext false
+    }
 
-    return try {
-        val fileName = if (target.displayName.contains(".")) target.displayName else "${target.displayName}_${System.currentTimeMillis()}${if (target.isVideo) ".mp4" else ".jpg"}"
+    val notificationId = (System.currentTimeMillis() % 100000).toInt() + 2000
+    val rawName = target.displayName
+    val extension = when {
+        rawName.contains(".") -> rawName.substringAfterLast('.').lowercase()
+        target.isVideo -> "mp4"
+        else -> "jpg"
+    }
+
+    val fileName = if (rawName.contains(".")) {
+        rawName
+    } else {
+        "${rawName}_${System.currentTimeMillis()}.$extension"
+    }
+
+    val mimeType = when (extension) {
+        "mp4" -> "video/mp4"
+        "mkv" -> "video/x-matroska"
+        "mov", "quicktime" -> "video/quicktime"
+        "jpg", "jpeg" -> "image/jpeg"
+        "png" -> "image/png"
+        "webp" -> "image/webp"
+        "pdf" -> "application/pdf"
+        "txt" -> "text/plain"
+        "zip" -> "application/zip"
+        else -> if (target.isVideo) "video/mp4" else "image/jpeg"
+    }
+
+    com.nissshh.wichat.core.notification.WiChatNotificationHelper.showDownloadProgressNotification(
+        context = context,
+        notificationId = notificationId,
+        fileName = fileName,
+        progress = 0,
+        max = 100
+    )
+
+    var success = false
+    try {
+        val totalBytes = sourceFile.length()
         val resolver = context.contentResolver
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val contentValues = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                put(MediaStore.MediaColumns.MIME_TYPE, if (target.isVideo) "video/mp4" else "image/jpeg")
+                put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
                 put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/WiChat")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
-            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues) ?: return false
-            resolver.openOutputStream(uri)?.use { out ->
-                FileInputStream(sourceFile).use { input ->
-                    input.copyTo(out)
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            if (uri != null) {
+                resolver.openOutputStream(uri, "w")?.use { out ->
+                    FileInputStream(sourceFile).use { input ->
+                        val buffer = ByteArray(64 * 1024)
+                        var bytesRead: Int
+                        var copied: Long = 0
+                        var lastProgressReport = 0
+
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            out.write(buffer, 0, bytesRead)
+                            copied += bytesRead
+                            if (totalBytes > 0) {
+                                val currentPct = ((copied * 100) / totalBytes).toInt()
+                                if (currentPct - lastProgressReport >= 10 || currentPct == 100) {
+                                    lastProgressReport = currentPct
+                                    com.nissshh.wichat.core.notification.WiChatNotificationHelper.showDownloadProgressNotification(
+                                        context = context,
+                                        notificationId = notificationId,
+                                        fileName = fileName,
+                                        progress = currentPct,
+                                        max = 100
+                                    )
+                                }
+                            }
+                        }
+                        out.flush()
+                    }
                 }
+
+                // Clear IS_PENDING so other apps can immediately see and open the complete file
+                contentValues.clear()
+                contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                resolver.update(uri, contentValues, null, null)
+                success = true
             }
-            true
         } else {
             val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
             val wiChatDir = File(downloadsDir, "WiChat").apply { mkdirs() }
             val destFile = File(wiChatDir, fileName)
-            FileInputStream(sourceFile).use { input ->
-                FileOutputStream(destFile).use { out ->
-                    input.copyTo(out)
+
+            FileOutputStream(destFile).use { out ->
+                FileInputStream(sourceFile).use { input ->
+                    val buffer = ByteArray(64 * 1024)
+                    var bytesRead: Int
+                    var copied: Long = 0
+                    var lastProgressReport = 0
+
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        out.write(buffer, 0, bytesRead)
+                        copied += bytesRead
+                        if (totalBytes > 0) {
+                            val currentPct = ((copied * 100) / totalBytes).toInt()
+                            if (currentPct - lastProgressReport >= 10 || currentPct == 100) {
+                                lastProgressReport = currentPct
+                                com.nissshh.wichat.core.notification.WiChatNotificationHelper.showDownloadProgressNotification(
+                                    context = context,
+                                    notificationId = notificationId,
+                                    fileName = fileName,
+                                    progress = currentPct,
+                                    max = 100
+                                )
+                            }
+                        }
+                    }
+                    out.flush()
                 }
             }
-            true
+            success = true
         }
     } catch (e: Exception) {
-        false
+        success = false
+    } finally {
+        com.nissshh.wichat.core.notification.WiChatNotificationHelper.showDownloadCompleteNotification(
+            context = context,
+            notificationId = notificationId,
+            fileName = fileName,
+            success = success
+        )
     }
+
+    success
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -396,9 +502,11 @@ fun OneToOneChatScreen(
                         val currentTarget = fileToDownload
                         fileToDownload = null
                         if (currentTarget != null) {
-                            val success = downloadFileToPublicStorage(context, currentTarget)
-                            val msg = if (success) "Saved to Downloads/WiChat" else "Failed to save file"
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            scope.launch {
+                                val success = downloadFileToPublicStorage(context, currentTarget)
+                                val msg = if (success) "Saved to Downloads/WiChat" else "Failed to save file"
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            }
                         }
                     },
                     colors = ButtonDefaults.buttonColors(

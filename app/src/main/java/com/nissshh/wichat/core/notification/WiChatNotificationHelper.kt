@@ -18,6 +18,7 @@ object WiChatNotificationHelper {
 
     const val CHANNEL_MESSAGES = "wichat_messages_channel"
     const val CHANNEL_REQUESTS = "wichat_requests_channel"
+    const val CHANNEL_DOWNLOADS = "wichat_downloads_channel"
 
     private const val NOTIFICATION_ID_MESSAGES = 1001
     private const val NOTIFICATION_ID_REQUESTS = 1002
@@ -48,8 +49,20 @@ object WiChatNotificationHelper {
                 setShowBadge(true)
             }
 
+            // Downloads Channel
+            val dlChannel = NotificationChannel(
+                CHANNEL_DOWNLOADS,
+                "File Downloads",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Download progress and saved file status"
+                enableVibration(false)
+                setShowBadge(false)
+            }
+
             notificationManager.createNotificationChannel(msgChannel)
             notificationManager.createNotificationChannel(reqChannel)
+            notificationManager.createNotificationChannel(dlChannel)
         }
     }
 
@@ -144,6 +157,71 @@ object WiChatNotificationHelper {
                 NOTIFICATION_ID_REQUESTS,
                 notification
             )
+        } catch (ignored: SecurityException) {}
+    }
+
+    fun showDownloadProgressNotification(
+        context: Context,
+        notificationId: Int,
+        fileName: String,
+        progress: Int,
+        max: Int = 100
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                return
+            }
+        }
+
+        createNotificationChannels(context)
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_DOWNLOADS)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle("Downloading $fileName")
+            .setContentText(if (max > 0) "$progress%" else "Saving...")
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+
+        if (max > 0) {
+            builder.setProgress(max, progress, false)
+        } else {
+            builder.setProgress(0, 0, true)
+        }
+
+        try {
+            NotificationManagerCompat.from(context).notify(notificationId, builder.build())
+        } catch (ignored: SecurityException) {}
+    }
+
+    fun showDownloadCompleteNotification(
+        context: Context,
+        notificationId: Int,
+        fileName: String,
+        success: Boolean
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                return
+            }
+        }
+
+        createNotificationChannels(context)
+
+        val title = if (success) "Download complete" else "Download failed"
+        val text = if (success) "Saved $fileName to Downloads/WiChat" else "Could not save $fileName"
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_DOWNLOADS)
+            .setSmallIcon(if (success) android.R.drawable.stat_sys_download_done else android.R.drawable.stat_notify_error)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setAutoCancel(true)
+            .setOngoing(false)
+            .setProgress(0, 0, false)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+
+        try {
+            NotificationManagerCompat.from(context).notify(notificationId, builder.build())
         } catch (ignored: SecurityException) {}
     }
 }
