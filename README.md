@@ -1,114 +1,108 @@
-# WiChat (Android)
+# WiChat 💬
+### Peer-to-Peer Local Wi-Fi Messenger for Android
 
-**Package / Application ID:** `com.nissshh.wichat`  
-**Launcher Name:** WiChat  
-**Typography:** Bundled DM Sans offline typography  
-**Design Reference:** Follows the 12 Light and 12 Dark screen design targets from `WiChat_Screen_Previews_DM_Sans_Light_Dark`.
+WiChat is a native Android messenger designed for offline, local-network communication. It lets two or more people chat, share photos and videos, and post temporary stories with anyone on the same Wi-Fi network — **without the internet, without phone numbers or emails, and without any cloud servers**.
 
-WiChat is a native Android local-network messaging application built for people connected to the same Wi-Fi / Local Area Network. It allows direct peer-to-peer discovery and messaging **without depending on the public internet, cloud accounts, phone number registration, or external backend servers**.
+Everything stays on your local network. No tracking, no metadata collection, and zero third-party intermediaries.
 
 ---
 
-## 1. Core Architecture & LAN Limitations
+## 📸 Screenshots
 
-### Architecture
-- **UI & Presentation:** 100% Jetpack Compose with Material 3 foundation, customized with WiChat design tokens (Light & Dark AMOLED themes, smooth color interpolation).
-- **Architecture Pattern:** Unidirectional Data Flow (UDF) with `ViewModel` / `StateFlow` and decoupled `WiChatRepository` interface.
-- **Local Persistence:** Room Database for profiles, contacts, requests, direct chats, groups, and stories. DataStore for preferences (theme, passcode verifier, reduce motion).
-- **Security & Keystore:** 
-  - Unique RSA-2048 identity keypair generated on first launch via **Android Keystore**.
-  - Salted SHA-256 verifier for 6-digit passcode lock (no plaintext PINs stored or logged).
-- **Discovery Layer:** Android Network Service Discovery (`NsdManager` / DNS-SD / mDNS) advertising `_wichat._tcp` with Wi-Fi multicast lock management.
-- **Transport Layer:** Local TCP Sockets on dynamically bound ports using framed, versioned JSON packets (`WiChatPacket`).
+<p align="center">
+  <img src="docs/screenshots/screen_chats.png" width="30%" alt="Chats Screen" />
+  <img src="docs/screenshots/screen_chat_thread.png" width="30%" alt="Chat Conversation" />
+  <img src="docs/screenshots/screen_devices.png" width="30%" alt="Peer Discovery" />
+</p>
 
-### Fundamental LAN Limitation
-> [!IMPORTANT]
-> Because WiChat is a pure peer-to-peer local-network application with **zero cloud servers or push relays**:
-> - An **offline recipient cannot receive a notification or message while their device is unreachable or disconnected from the Wi-Fi**.
-> - WiChat displays truthful states: messages remain queued locally until the peer reconnects to the same Wi-Fi.
-> - On networks with **AP / Client Isolation** enabled (e.g., some hotel, university, or guest Wi-Fi networks), the router blocks device-to-device traffic. WiChat includes built-in diagnostics explaining this state.
+<p align="center">
+  <img src="docs/screenshots/screen_stories.png" width="30%" alt="Stories Screen" />
+  <img src="docs/screenshots/screen_requests.png" width="30%" alt="Connection Requests" />
+  <img src="docs/screenshots/screen_profile.png" width="30%" alt="Profile & Settings" />
+</p>
 
 ---
 
-## 2. Project Structure
+## ✨ Features
 
-```
-WiChat/
-├── app/
-│   ├── src/main/
-│   │   ├── AndroidManifest.xml
-│   │   ├── java/com/nissshh/wichat/
-│   │   │   ├── WiChatApplication.kt
-│   │   │   ├── MainActivity.kt
-│   │   │   ├── core/
-│   │   │   │   ├── designsystem/theme/ (Color.kt, Type.kt, Theme.kt, Motion.kt)
-│   │   │   │   ├── model/ (Models.kt)
-│   │   │   │   ├── database/ (WiChatDatabase.kt)
-│   │   │   │   ├── datastore/ (PreferencesRepository.kt)
-│   │   │   │   ├── security/ (SecurityManager.kt)
-│   │   │   │   ├── network/
-│   │   │   │   │   ├── protocol/ (WiChatPacket.kt)
-│   │   │   │   │   ├── nsd/ (WiChatNsdManager.kt)
-│   │   │   │   │   └── transport/ (WiChatTransport.kt)
-│   │   │   │   └── repository/ (WiChatRepository.kt, WiChatRepositoryImpl.kt)
-│   │   │   └── feature/
-│   │   │       ├── onboarding/ (PasscodeSetupScreen.kt, PermissionsOnboardingScreen.kt, ProfileCreationScreen.kt)
-│   │   │       ├── devices/ (DevicesScreen.kt)
-│   │   │       ├── requests/ (RequestsScreen.kt)
-│   │   │       ├── chats/ (ChatsScreen.kt, OneToOneChatScreen.kt)
-│   │   │       ├── stories/ (StoriesScreen.kt)
-│   │   │       ├── profile/ (ProfileSettingsScreen.kt)
-│   │   │       ├── diagnostics/ (NetworkDiagnosticsScreen.kt)
-│   │   │       └── navigation/ (MainNavigationContainer.kt)
-│   │   └── res/
-│   │       ├── drawable/ (ic_launcher_background.xml, ic_launcher_foreground.xml)
-│   │       ├── font/ (dm_sans_regular.ttf, dm_sans_medium.ttf, dm_sans_bold.ttf, OFL.txt)
-│   │       ├── mipmap-*/ (Adaptive & legacy launcher icons)
-│   │       └── values/ (strings.xml, themes.xml)
-│   └── build.gradle.kts
-├── gradle/
-│   ├── wrapper/ (gradle-wrapper.properties, gradle-wrapper.jar)
-│   └── libs.versions.toml (Version catalog)
-├── build.gradle.kts
-├── settings.gradle.kts
-└── README.md
-```
+- **Zero Cloud Dependence**: Operates entirely over local Wi-Fi / LAN using Android Network Service Discovery (mDNS) with resilient UDP broadcast fallback.
+- **Direct & Group Chats**: Instant messaging between local peers and local group conversations without external servers.
+- **In-App Media Preview**: View shared photos and stream videos directly within the app using the built-in media viewer.
+- **Save to Downloads**: Long-press any media or attachment to export it directly to your phone's public `Downloads/WiChat` folder.
+- **24-Hour Local Stories**: Share temporary updates with peers on your Wi-Fi. Features a full-screen 10-second viewer with animated progress timer and long-press deletion.
+- **Smart Foreground Notifications**: Keeps you informed with connection request alerts without cluttering your screen with message popups when you're already actively chatting.
+- **Identity & Passcode Protection**: Each device generates an RSA-2048 keypair on first launch using Android Keystore. Chats can be protected with an optional 6-digit passcode.
+- **Material 3 Design System**: Clean, textured backgrounds for both Light and Dark modes with responsive micro-animations and typography.
 
 ---
 
-## 3. Build & Run Instructions
+## 🛠 Tech Stack
+
+- **UI**: 100% Jetpack Compose with Material 3 Foundation
+- **Language**: Kotlin & Coroutines / StateFlow (Unidirectional Data Flow)
+- **Database**: Room Database for local-first storage
+- **Preferences**: Jetpack DataStore Preferences
+- **Discovery**: Android `NsdManager` (DNS-SD / mDNS) + UDP Subnet Broadcast fallback
+- **Sockets**: Raw non-blocking TCP sockets with custom `WiChatPacket` framing
+- **Security**: Android Keystore (RSA-2048 identity key generation) + PBKDF2/SHA-256 for passcode hashing
+
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
 - Android Studio Ladybug (2024.2.1+) or command-line Android SDK
-- JDK 17 (verified with OpenJDK 17)
-- Android SDK Platform 35 (`compileSdk = 35`, `minSdk = 26`)
+- JDK 17
+- Android Device running Android 8.0 (API 26) or higher
 
-### Build Commands
-To build the debug APK:
-```bash
-./gradlew assembleDebug
-```
-The resulting APK will be placed at:
-`app/build/outputs/apk/debug/app-debug.apk`
+### Building from Source
 
-To run unit tests:
-```bash
-./gradlew test
-```
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/nissshhdev/WiChat.git
+   cd WiChat
+   ```
+
+2. **Build Debug APK:**
+   ```bash
+   ./gradlew assembleDebug
+   ```
+   The APK will be generated at:
+   `app/build/outputs/apk/debug/app-debug.apk`
+
+3. **Build Release APK:**
+   ```bash
+   ./gradlew assembleRelease
+   ```
+   The APK will be generated at:
+   `app/build/outputs/apk/release/app-release.apk`
+
+4. **Install to Connected Device:**
+   ```bash
+   adb install -r app/build/outputs/apk/release/app-release.apk
+   ```
 
 ---
 
-## 4. How to Test with Two Devices (Without Internet)
+## 💡 How It Works Under the Hood
 
-1. Connect two Android phones to the **same Wi-Fi router** or have one phone turn on its **Personal Wi-Fi Hotspot** and connect the second phone to it.
-2. **Turn off the internet uplink** (unplug WAN cable or turn off mobile data).
-3. Install and open WiChat on both phones:
-   - Complete 6-digit passcode setup.
-   - Accept local network permissions.
-   - Set a Display Name (e.g., "Aarav" on Phone A, "Maya" on Phone B).
-4. Go to the **Devices** tab:
-   - Phone A will discover Phone B via mDNS (`_wichat._tcp`).
-   - Tap **Message** on Phone A to send a connection request.
-5. On Phone B, go to the **Requests** tab:
-   - View Phone A's intro request and tap **Accept**.
-6. Both phones will open a direct 1-to-1 chat session and exchange text messages in real-time over the local Wi-Fi without contacting any cloud servers.
+1. **Service Announcement**: When WiChat opens, it binds an ephemeral TCP server port and advertises itself using Android's `NsdManager` service type `_wichat._tcp`.
+2. **Subnet Broadcast Fallback**: Some home and office routers throttle or block mDNS multicast. WiChat automatically maintains a lightweight UDP broadcast heartbeat on port `54321` so peers discover each other even on tricky networks.
+3. **Connection Requests**: To protect privacy, sending a message to a newly discovered peer triggers an invite request that the recipient can accept or decline before messages flow.
+4. **End-to-End Direct**: Messages and media packets are streamed directly between device IPs via local sockets. If your device disconnects from the Wi-Fi, messages simply queue safely on your device until reconnected.
+
+---
+
+## ☕ Support & Community
+
+Created with care by **nissshh** ([@nissshhdev](https://github.com/nissshhdev)).
+
+If you find WiChat useful or appreciate private local-network communication, feel free to support:
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/nissshhdevz)
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
