@@ -530,7 +530,7 @@ fun ProfileSettingsScreen(
 
                         OutlinedButton(
                             onClick = {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/nissshhdev/WiChat")).apply {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/nissshhdev/")).apply {
                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                 }
                                 context.startActivity(intent)
@@ -538,13 +538,13 @@ fun ProfileSettingsScreen(
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Star,
+                                imageVector = Icons.Default.Person,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Star", style = MaterialTheme.typography.labelSmall)
+                            Text("Profile", style = MaterialTheme.typography.labelSmall)
                         }
                     }
 
