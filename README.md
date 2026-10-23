@@ -5,6 +5,14 @@ WiChat is a native Android messenger designed for offline, local-network communi
 
 Everything stays on your local network. No tracking, no metadata collection, and zero third-party intermediaries.
 
+
+---
+
+## 📥 Download Build
+
+Get the ready-to-install APK directly from this repository:
+- **[Download WiChat Release APK](build-apk/WiChat-release.apk?raw=true)** (~12.7 MB)
+
 ---
 
 ## 📸 Screenshots
