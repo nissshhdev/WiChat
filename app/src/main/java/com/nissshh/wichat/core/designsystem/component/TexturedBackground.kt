@@ -25,13 +25,13 @@ fun TexturedBackground(
     val isDark = MaterialTheme.colorScheme.background.red < 0.1f // Detect dark theme
     val baseBackground = MaterialTheme.colorScheme.background
 
-    // Wave stroke styling:
-    // In Dark mode: #222222 on black background (as in the SVG spec stroke='#222')
-    // In Light mode: subtle refined slate wave (#E2E8F0) on light background
+    // Ultra-subtle ambient watermark styling:
+    // In Dark mode: very gentle #222222 at 0.35 opacity so text & icons pop with maximum contrast
+    // In Light mode: faint slate at 0.40 opacity
     val waveStrokeColor = if (isDark) {
-        Color(0xFF222222)
+        Color(0xFF222222).copy(alpha = 0.35f)
     } else {
-        Color(0xFFE2E8F0)
+        Color(0xFFCBD5E1).copy(alpha = 0.40f)
     }
 
     Box(
@@ -42,7 +42,7 @@ fun TexturedBackground(
                 val unitWidth = size.width
                 val scale = unitWidth / 500f // 500 units per repeat (SVG period)
                 val patternHeight = 120f * scale
-                val strokeWidthPx = 3.6f * scale
+                val strokeWidthPx = 1.2f * density // Refined, crisp thin stroke so UI elements stay razor sharp
 
                 // Y-offsets from SVG: 75, 45, 105, 15, -15, 135 (every 30 units)
                 val baseOffsets = floatArrayOf(75f, 45f, 105f, 15f, -15f, 135f)
