@@ -56,7 +56,7 @@ enum class MessageDeliveryStatus {
 }
 
 enum class MessageContentType {
-    TEXT, IMAGE, FILE
+    TEXT, IMAGE, VIDEO, PDF, FILE
 }
 
 data class ChatMessage(

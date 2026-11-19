@@ -1,3 +1,4 @@
+com.nissshh.wichat:xml/file_paths = 0x7f0d0000
 com.nissshh.wichat:styleable/Navigator = 0x7f0c000d
 com.nissshh.wichat:styleable/NavDeepLink = 0x7f0c0009
 com.nissshh.wichat:styleable/GradientColor = 0x7f0c0005

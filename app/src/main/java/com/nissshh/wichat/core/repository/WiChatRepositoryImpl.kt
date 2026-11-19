@@ -39,6 +39,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import android.util.Base64
+import java.io.File
+import java.io.FileOutputStream
 import java.util.UUID
 
 class WiChatRepositoryImpl(
@@ -439,7 +442,14 @@ class WiChatRepositoryImpl(
         dao.blockContact(peerId)
     }
 
-    override suspend fun sendMessage(conversationId: String, text: String, peerId: String?): Boolean {
+    override suspend fun sendMessage(
+        conversationId: String,
+        text: String,
+        peerId: String?,
+        mediaBytes: ByteArray?,
+        mediaFileName: String?,
+        mediaMimeType: String?
+    ): Boolean {
         val myProfile = _localProfile.value ?: return false
         val msgId = UUID.randomUUID().toString()
 
@@ -456,16 +466,33 @@ class WiChatRepositoryImpl(
             }
         }
 
+        val hasMedia = mediaBytes != null && mediaBytes.isNotEmpty()
+        val cType = if (hasMedia) {
+            val lowerName = mediaFileName?.lowercase() ?: ""
+            val lowerMime = mediaMimeType?.lowercase() ?: ""
+            if (lowerMime.startsWith("image") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".png") || lowerName.endsWith(".webp") || lowerName.endsWith(".gif")) {
+                MessageContentType.IMAGE
+            } else if (lowerMime.startsWith("video") || lowerName.endsWith(".mp4") || lowerName.endsWith(".mkv") || lowerName.endsWith(".3gp") || lowerName.endsWith(".webm")) {
+                MessageContentType.VIDEO
+            } else if (lowerMime.contains("pdf") || lowerName.endsWith(".pdf")) {
+                MessageContentType.PDF
+            } else {
+                MessageContentType.FILE
+            }
+        } else {
+            MessageContentType.TEXT
+        }
+
         val msgEntity = MessageEntity(
             messageId = msgId,
             conversationId = conversationId,
             senderPeerId = myProfile.peerId,
             isOutgoing = true,
-            contentType = MessageContentType.TEXT.name,
+            contentType = cType.name,
             textContent = text,
-            fileName = null,
-            fileSize = 0,
-            fileMimeType = null,
+            fileName = mediaFileName,
+            fileSize = mediaBytes?.size?.toLong() ?: 0L,
+            fileMimeType = mediaMimeType,
             localUri = null,
             timestamp = System.currentTimeMillis(),
             deliveryStatus = MessageDeliveryStatus.SENDING.name
@@ -474,9 +501,17 @@ class WiChatRepositoryImpl(
 
         // Also update last message preview in conversations table
         if (conv != null) {
+            val previewText = if (hasMedia) {
+                when (cType) {
+                    MessageContentType.IMAGE -> "📷 Photo"
+                    MessageContentType.VIDEO -> "🎬 Video: ${mediaFileName ?: "Video"}"
+                    MessageContentType.PDF -> "📄 PDF: ${mediaFileName ?: "Document"}"
+                    else -> "📁 ${mediaFileName ?: "File"}"
+                }
+            } else text
             dao.insertConversation(
                 conv.copy(
-                    lastMessage = text,
+                    lastMessage = previewText,
                     lastTimestamp = System.currentTimeMillis()
                 )
             )
@@ -484,11 +519,17 @@ class WiChatRepositoryImpl(
 
         val payload = JSONObject().apply {
             put("convId", conversationId)
-            put("text", text)
+            put("text", if (hasMedia) text.substringBefore("\n[local_media:") else text)
             put("senderName", myProfile.displayName)
             put("isGroup", isGroup)
             if (conv != null) {
                 put("convTitle", conv.title)
+            }
+            if (hasMedia) {
+                put("hasMedia", true)
+                put("mediaData", Base64.encodeToString(mediaBytes, Base64.NO_WRAP))
+                put("mediaFileName", mediaFileName ?: "attachment")
+                put("mediaMimeType", mediaMimeType ?: "application/octet-stream")
             }
         }
 
@@ -661,16 +702,68 @@ class WiChatRepositoryImpl(
                             rawConvId
                         }
 
+                        val hasMedia = json.optBoolean("hasMedia", false)
+                        var receivedContentType = MessageContentType.TEXT
+                        var receivedFileName: String? = null
+                        var receivedFileSize = 0L
+                        var receivedMimeType: String? = null
+                        var effectiveText = text
+
+                        if (hasMedia) {
+                            val mediaBase64 = json.optString("mediaData", "")
+                            receivedFileName = json.optString("mediaFileName", "attachment_${System.currentTimeMillis()}")
+                            receivedMimeType = json.optString("mediaMimeType", "application/octet-stream")
+
+                            if (mediaBase64.isNotEmpty()) {
+                                try {
+                                    val decodedBytes = Base64.decode(mediaBase64, Base64.DEFAULT)
+                                    receivedFileSize = decodedBytes.size.toLong()
+                                    val lowerMime = receivedMimeType.lowercase()
+                                    val lowerName = receivedFileName.lowercase()
+                                    val isImage = lowerMime.startsWith("image") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".png") || lowerName.endsWith(".webp") || lowerName.endsWith(".gif")
+                                    val isVideo = lowerMime.startsWith("video") || lowerName.endsWith(".mp4") || lowerName.endsWith(".mkv") || lowerName.endsWith(".3gp") || lowerName.endsWith(".webm")
+                                    val isPdf = lowerMime.contains("pdf") || lowerName.endsWith(".pdf")
+
+                                    receivedContentType = when {
+                                        isImage -> MessageContentType.IMAGE
+                                        isVideo -> MessageContentType.VIDEO
+                                        isPdf -> MessageContentType.PDF
+                                        else -> MessageContentType.FILE
+                                    }
+
+                                    // Save file to app's internal filesDir
+                                    val safeFileName = "rx_${System.currentTimeMillis()}_${receivedFileName.substringAfterLast('/')}"
+                                    val savedFile = File(context.filesDir, safeFileName)
+                                    FileOutputStream(savedFile).use { fos ->
+                                        fos.write(decodedBytes)
+                                        fos.flush()
+                                    }
+
+                                    // Append local_media path so MessageBubble and download target recognize it
+                                    val cleanText = effectiveText.substringBefore("\n[local_media:")
+                                    val mediaLabel = when (receivedContentType) {
+                                        MessageContentType.IMAGE -> "📷 Photo: $receivedFileName"
+                                        MessageContentType.VIDEO -> "🎬 Video: $receivedFileName"
+                                        MessageContentType.PDF -> "📄 PDF: $receivedFileName"
+                                        else -> "📁 File: $receivedFileName"
+                                    }
+                                    effectiveText = if (cleanText.isBlank()) "$mediaLabel\n[local_media:${savedFile.absolutePath}]" else "$cleanText\n[local_media:${savedFile.absolutePath}]"
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error saving received media bytes", e)
+                                }
+                            }
+                        }
+
                         val msg = MessageEntity(
                             messageId = packet.packetId,
                             conversationId = convId,
                             senderPeerId = packet.senderPeerId,
                             isOutgoing = false,
-                            contentType = MessageContentType.TEXT.name,
-                            textContent = text,
-                            fileName = null,
-                            fileSize = 0,
-                            fileMimeType = null,
+                            contentType = receivedContentType.name,
+                            textContent = effectiveText,
+                            fileName = receivedFileName,
+                            fileSize = receivedFileSize,
+                            fileMimeType = receivedMimeType,
                             localUri = null,
                             timestamp = packet.timestamp,
                             deliveryStatus = MessageDeliveryStatus.DELIVERED.name
@@ -686,11 +779,20 @@ class WiChatRepositoryImpl(
                             if (senderName.isNotBlank()) senderName else (peer?.displayName ?: existingConv?.title ?: "Nearby Peer")
                         }
 
+                        val previewLastMsg = if (hasMedia) {
+                            when (receivedContentType) {
+                                MessageContentType.IMAGE -> "📷 Photo"
+                                MessageContentType.VIDEO -> "🎬 Video: ${receivedFileName ?: "Video"}"
+                                MessageContentType.PDF -> "📄 PDF: ${receivedFileName ?: "Document"}"
+                                else -> "📁 ${receivedFileName ?: "File"}"
+                            }
+                        } else effectiveText
+
                         val currentUnread = (existingConv?.unreadCount ?: 0) + 1
                         dao.insertConversation(
                             existingConv?.copy(
                                 title = effectiveTitle,
-                                lastMessage = text,
+                                lastMessage = previewLastMsg,
                                 lastTimestamp = packet.timestamp,
                                 unreadCount = currentUnread
                             ) ?: ConversationEntity(
@@ -698,19 +800,18 @@ class WiChatRepositoryImpl(
                                 type = if (isGroup) "GROUP" else "DIRECT",
                                 title = effectiveTitle,
                                 subtitle = if (isGroup) "Wi-Fi Group Chat" else "Available on Wi-Fi",
-                                lastMessage = text,
+                                lastMessage = previewLastMsg,
                                 lastTimestamp = packet.timestamp,
                                 peerId = if (isGroup) null else packet.senderPeerId,
                                 unreadCount = currentUnread
                             )
                         )
 
-
                         // Trigger Local Notification for incoming message
                         com.nissshh.wichat.core.notification.WiChatNotificationHelper.showMessageNotification(
                             context = context,
                             senderName = effectiveTitle,
-                            messageText = text,
+                            messageText = previewLastMsg,
                             conversationId = convId
                         )
                     } catch (e: Exception) {

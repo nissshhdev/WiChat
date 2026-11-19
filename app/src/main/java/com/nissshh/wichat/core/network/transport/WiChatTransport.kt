@@ -52,8 +52,8 @@ class WiChatServer(
     private fun handleClient(socket: Socket) {
         val remoteIp = socket.inetAddress.hostAddress ?: "unknown"
         try {
-            socket.soTimeout = 15000 // 15s read timeout
-            val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+            socket.soTimeout = 30000 // 30s read timeout
+            val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8), 128 * 1024)
             val line = reader.readLine()
             if (!line.isNullOrBlank()) {
                 val packet = WiChatPacket.deserialize(line)
@@ -80,7 +80,7 @@ class WiChatServer(
 class WiChatClient {
     companion object {
         const val TAG = "WiChatClient"
-        const val CONNECT_TIMEOUT_MS = 5000
+        const val CONNECT_TIMEOUT_MS = 10000
     }
 
     suspend fun sendPacket(host: String, port: Int, packet: WiChatPacket): Boolean {
@@ -88,9 +88,11 @@ class WiChatClient {
             try {
                 val socket = Socket()
                 socket.connect(java.net.InetSocketAddress(host, port), CONNECT_TIMEOUT_MS)
-                socket.soTimeout = 8000
-                val writer = PrintWriter(socket.getOutputStream(), true)
-                writer.println(packet.serialize())
+                socket.soTimeout = 30000
+                val writer = java.io.BufferedWriter(java.io.OutputStreamWriter(socket.getOutputStream(), Charsets.UTF_8), 128 * 1024)
+                writer.write(packet.serialize())
+                writer.write("\n")
+                writer.flush()
                 socket.close()
                 true
             } catch (e: Exception) {

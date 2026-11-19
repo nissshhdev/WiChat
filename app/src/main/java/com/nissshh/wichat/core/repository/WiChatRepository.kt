@@ -26,7 +26,14 @@ interface WiChatRepository {
     suspend fun sendConnectionRequest(peer: DiscoveredPeer, introText: String): Boolean
     suspend fun respondToRequest(requestId: String, accept: Boolean)
     suspend fun blockPeer(peerId: String)
-    suspend fun sendMessage(conversationId: String, text: String, peerId: String?): Boolean
+    suspend fun sendMessage(
+        conversationId: String,
+        text: String,
+        peerId: String?,
+        mediaBytes: ByteArray? = null,
+        mediaFileName: String? = null,
+        mediaMimeType: String? = null
+    ): Boolean
     suspend fun publishStory(textCaption: String, backgroundHex: String)
     suspend fun deleteStory(storyId: String)
     suspend fun triggerDiscoveryScan()

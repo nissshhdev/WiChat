@@ -52,6 +52,8 @@ public final class WiChatDao_Impl implements WiChatDao {
 
   private final SharedSQLiteStatement __preparedStmtOfDeleteConversation;
 
+  private final SharedSQLiteStatement __preparedStmtOfDeleteMessageById;
+
   private final SharedSQLiteStatement __preparedStmtOfUpdateMessageStatus;
 
   private final SharedSQLiteStatement __preparedStmtOfDeleteStoryById;
@@ -240,6 +242,14 @@ public final class WiChatDao_Impl implements WiChatDao {
       @NonNull
       public String createQuery() {
         final String _query = "DELETE FROM conversations WHERE conversationId = ?";
+        return _query;
+      }
+    };
+    this.__preparedStmtOfDeleteMessageById = new SharedSQLiteStatement(__db) {
+      @Override
+      @NonNull
+      public String createQuery() {
+        final String _query = "DELETE FROM messages WHERE messageId = ?";
         return _query;
       }
     };
@@ -491,6 +501,32 @@ public final class WiChatDao_Impl implements WiChatDao {
           }
         } finally {
           __preparedStmtOfDeleteConversation.release(_stmt);
+        }
+      }
+    }, $completion);
+  }
+
+  @Override
+  public Object deleteMessageById(final String messageId,
+      final Continuation<? super Unit> $completion) {
+    return CoroutinesRoom.execute(__db, true, new Callable<Unit>() {
+      @Override
+      @NonNull
+      public Unit call() throws Exception {
+        final SupportSQLiteStatement _stmt = __preparedStmtOfDeleteMessageById.acquire();
+        int _argIndex = 1;
+        _stmt.bindString(_argIndex, messageId);
+        try {
+          __db.beginTransaction();
+          try {
+            _stmt.executeUpdateDelete();
+            __db.setTransactionSuccessful();
+            return Unit.INSTANCE;
+          } finally {
+            __db.endTransaction();
+          }
+        } finally {
+          __preparedStmtOfDeleteMessageById.release(_stmt);
         }
       }
     }, $completion);

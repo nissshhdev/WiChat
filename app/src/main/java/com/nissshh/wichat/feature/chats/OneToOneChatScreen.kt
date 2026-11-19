@@ -2,6 +2,8 @@ package com.nissshh.wichat.feature.chats
 
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
@@ -12,6 +14,8 @@ import android.widget.FrameLayout
 import android.widget.MediaController
 import android.widget.Toast
 import android.widget.VideoView
+import androidx.core.content.FileProvider
+import java.io.ByteArrayOutputStream
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -45,6 +49,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
@@ -250,6 +256,38 @@ suspend fun downloadFileToPublicStorage(
     success
 }
 
+fun decodeSampledBitmap(filePath: String, reqWidth: Int = 1200, reqHeight: Int = 1200): Bitmap? {
+    return try {
+        val file = File(filePath)
+        if (!file.exists() || file.length() == 0L) return null
+
+        val options = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        BitmapFactory.decodeFile(file.absolutePath, options)
+
+        var inSampleSize = 1
+        val height = options.outHeight
+        val width = options.outWidth
+
+        if (height > reqHeight || width > reqWidth) {
+            val halfHeight = height / 2
+            val halfWidth = width / 2
+            while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+
+        val decodeOptions = BitmapFactory.Options().apply {
+            this.inSampleSize = inSampleSize
+            inPreferredConfig = Bitmap.Config.RGB_565
+        }
+        BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
+    } catch (e: Throwable) {
+        null
+    }
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -275,20 +313,96 @@ fun OneToOneChatScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
-            scope.launch {
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 try {
                     val cr = context.contentResolver
-                    val mime = cr.getType(uri) ?: ""
-                    val isVid = mime.startsWith("video") || uri.toString().contains(".mp4")
-                    val ext = if (isVid) ".mp4" else ".jpg"
+                    val mime = cr.getType(uri) ?: "application/octet-stream"
+                    val lowerMime = mime.lowercase()
+                    val uriString = uri.toString().lowercase()
+                    val cleanName = uri.lastPathSegment?.substringAfterLast('/') ?: "attachment"
+                    val lowerCleanName = cleanName.lowercase()
+
+                    val isVid = lowerMime.startsWith("video") || lowerCleanName.endsWith(".mp4") || lowerCleanName.endsWith(".mkv") || lowerCleanName.endsWith(".3gp") || lowerCleanName.endsWith(".webm")
+                    val isImg = lowerMime.startsWith("image") || lowerCleanName.endsWith(".jpg") || lowerCleanName.endsWith(".jpeg") || lowerCleanName.endsWith(".png") || lowerCleanName.endsWith(".webp")
+                    val isPdf = lowerMime.contains("pdf") || lowerCleanName.endsWith(".pdf")
+
+                    val ext = when {
+                        isVid -> if (lowerCleanName.contains(".")) ".${lowerCleanName.substringAfterLast('.')}" else ".mp4"
+                        isPdf -> ".pdf"
+                        lowerCleanName.contains(".") -> ".${lowerCleanName.substringAfterLast('.')}"
+                        lowerMime.contains("png") -> ".png"
+                        else -> ".jpg"
+                    }
                     val file = File(context.filesDir, "media_${System.currentTimeMillis()}$ext")
-                    cr.openInputStream(uri)?.use { input ->
-                        file.outputStream().use { output ->
-                            input.copyTo(output)
+
+                    var fileBytes: ByteArray? = null
+
+                    if (isImg) {
+                        try {
+                            // Downscale and compress image to ensure fast and reliable LAN transfer
+                            cr.openInputStream(uri)?.use { inStream ->
+                                val origBmp = BitmapFactory.decodeStream(inStream)
+                                if (origBmp != null) {
+                                    val maxDim = 1280
+                                    val origW = origBmp.width
+                                    val origH = origBmp.height
+                                    val (targetW, targetH) = if (origW > maxDim || origH > maxDim) {
+                                        val ratio = origW.toFloat() / origH.toFloat()
+                                        if (ratio > 1f) {
+                                            maxDim to (maxDim / ratio).toInt()
+                                        } else {
+                                            (maxDim * ratio).toInt() to maxDim
+                                        }
+                                    } else {
+                                        origW to origH
+                                    }
+                                    val scaledBmp = Bitmap.createScaledBitmap(origBmp, targetW, targetH, true)
+                                    val baos = ByteArrayOutputStream()
+                                    scaledBmp.compress(Bitmap.CompressFormat.JPEG, 80, baos)
+                                    fileBytes = baos.toByteArray()
+                                    if (scaledBmp != origBmp) scaledBmp.recycle()
+                                    origBmp.recycle()
+                                }
+                            }
+                        } catch (e: Throwable) {
+                            fileBytes = null
                         }
                     }
-                    val label = if (isVid) "🎬 Video: ${file.name}" else "📷 Photo: ${file.name}"
-                    repository.sendMessage(conversationId, "$label\n[local_media:${file.absolutePath}]", null)
+
+                    if (fileBytes == null) {
+                        cr.openInputStream(uri)?.use { input ->
+                            fileBytes = input.readBytes()
+                        }
+                    }
+
+                    if (fileBytes != null && fileBytes!!.isNotEmpty()) {
+                        file.outputStream().use { output ->
+                            output.write(fileBytes!!)
+                        }
+                        val label = when {
+                            isVid -> "🎬 Video: $cleanName"
+                            isImg -> "📷 Photo: $cleanName"
+                            isPdf -> "📄 PDF: $cleanName"
+                            else -> "📁 File: $cleanName"
+                        }
+                        val effectiveMime = when {
+                            isImg -> "image/jpeg"
+                            isPdf -> "application/pdf"
+                            else -> mime
+                        }
+                        repository.sendMessage(
+                            conversationId = conversationId,
+                            text = "$label\n[local_media:${file.absolutePath}]",
+                            peerId = null,
+                            mediaBytes = fileBytes,
+                            mediaFileName = cleanName,
+                            mediaMimeType = effectiveMime
+                        )
+                    } else {
+                        withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            Toast.makeText(context, "Could not read media file", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 } catch (e: Exception) {
                     val fileName = uri.lastPathSegment?.substringAfterLast('/') ?: "attachment"
                     repository.sendMessage(conversationId, "📎 Shared media: $fileName", null)
@@ -692,11 +806,7 @@ fun InbuiltMediaViewerDialog(
                         )
                     } else {
                         val bmp = remember(target.filePath) {
-                            try {
-                                if (file.exists()) BitmapFactory.decodeFile(file.absolutePath) else null
-                            } catch (e: Exception) {
-                                null
-                            }
+                            decodeSampledBitmap(target.filePath, reqWidth = 1920, reqHeight = 1920)
                         }
                         if (bmp != null) {
                             Image(
@@ -745,8 +855,11 @@ fun MessageBubble(
     } else {
         rawText
     }
-    val isVideo = mediaPath?.endsWith(".mp4") == true || displayContent.contains("Video")
-    val isImage = mediaPath?.endsWith(".jpg") == true || mediaPath?.endsWith(".png") == true || displayContent.contains("Photo")
+    val isVideo = mediaPath?.endsWith(".mp4") == true || mediaPath?.endsWith(".mkv") == true || mediaPath?.endsWith(".3gp") == true || mediaPath?.endsWith(".webm") == true || displayContent.contains("Video")
+    val isImage = mediaPath?.endsWith(".jpg") == true || mediaPath?.endsWith(".png") == true || mediaPath?.endsWith(".jpeg") == true || mediaPath?.endsWith(".webp") == true || displayContent.contains("Photo")
+    val isPdf = mediaPath?.endsWith(".pdf") == true || displayContent.contains("PDF")
+    val isGenericFile = mediaPath != null && !isImage && !isVideo && !isPdf
+    val context = LocalContext.current
 
     Box(
         modifier = Modifier.fillMaxWidth(),
@@ -816,12 +929,7 @@ fun MessageBubble(
                         contentAlignment = Alignment.Center
                     ) {
                         val previewBmp = remember(mediaPath) {
-                            try {
-                                val file = File(mediaPath)
-                                if (file.exists() && isImage) BitmapFactory.decodeFile(file.absolutePath) else null
-                            } catch (e: Exception) {
-                                null
-                            }
+                            if (isImage) decodeSampledBitmap(mediaPath, reqWidth = 600, reqHeight = 600) else null
                         }
 
                         if (previewBmp != null) {
@@ -847,6 +955,88 @@ fun MessageBubble(
                                 )
                             }
                         }
+                    }
+                }
+            } else if (mediaPath != null && (isPdf || isGenericFile)) {
+                // PDF or Document Card
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp)
+                        .combinedClickable(
+                            onClick = {
+                                try {
+                                    val file = File(mediaPath)
+                                    val uri = FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.fileprovider",
+                                        file
+                                    )
+                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                        val type = if (isPdf) "application/pdf" else "*/*"
+                                        setDataAndType(uri, type)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(Intent.createChooser(intent, "Open with"))
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "No app available to open file", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onLongClick = {
+                                val cleanName = File(mediaPath).name
+                                onMediaLongClick(
+                                    FileDownloadTarget(
+                                        sourcePath = mediaPath,
+                                        displayName = cleanName,
+                                        isVideo = false
+                                    )
+                                )
+                            }
+                        ),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isPdf) Color(0xFFE53935).copy(alpha = 0.15f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isPdf) Icons.Default.PictureAsPdf else Icons.Default.AttachFile,
+                                contentDescription = null,
+                                tint = if (isPdf) Color(0xFFE53935) else MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = File(mediaPath).name,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                maxLines = 1,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            val fileSizeKb = File(mediaPath).length() / 1024
+                            Text(
+                                text = if (fileSizeKb > 1024) "${fileSizeKb / 1024} MB • Tap to open" else "$fileSizeKb KB • Tap to open",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.OpenInNew,
+                            contentDescription = "Open",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
