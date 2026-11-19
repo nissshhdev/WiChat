@@ -1,4 +1,4 @@
-# WiChat 💬
+# WiChat 💬  [![Get it on Orion Store](https://raw.githubusercontent.com/RookieEnough/Orion-Store/refs/heads/main/assets/orion-badge.png)](https://rookieenough.github.io/Orion-Data/redirect.html?id=wichat)
 ### Peer-to-Peer Local Wi-Fi Messenger for Android
 
 WiChat is a native Android messenger designed for offline, local-network communication. It lets two or more people chat, share photos and videos, and post temporary stories with anyone on the same Wi-Fi network — **without the internet, without phone numbers or emails, and without any cloud servers**.
